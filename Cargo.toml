@@ -1,0 +1,8 @@
+[package]
+name = "sensors-send-questdb"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+log = "0.4.27"
+questdb-rs = "4.0.4"
