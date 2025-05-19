@@ -11,9 +11,10 @@ const DATABASE_TABLE: &str = "measurements";
 fn main() {
     let measurement = read_sensors().expect("Reading measurement should succeed");
     send_measurement(&measurement).expect("Sending measurement should succeed");
-    log::info!("All done.");
+    println!("All done.");
 }
 
+#[derive(Debug)]
 struct Measurement {
     temperature: f64,
     humidity: f64,
@@ -21,7 +22,7 @@ struct Measurement {
 }
 
 fn read_sensors() -> Result<Measurement, std::io::Error> {
-    log::info!("Reading sensors...");
+    println!("Reading sensors...");
     let output = Command::new(SENSORS_BINARY).output()?.stdout;
     let line = String::from_utf8_lossy(&output);
     parse_reading_line(line.trim()).ok_or(std::io::Error::new(
@@ -48,10 +49,10 @@ fn parse_reading_line(line: &str) -> Option<Measurement> {
 }
 
 fn send_measurement(measurement: &Measurement) -> Result<(), questdb::Error> {
-    log::info!("Connecting to database...");
+    println!("Connecting to database...");
     let mut sender = Sender::from_conf(format!("http::addr={DATABASE_HOSTNAME}:{DATABASE_PORT};"))?;
 
-    log::info!("Sending measurement...");
+    println!("Sending measurement {measurement:?} ...");
     let mut buffer = Buffer::new();
     buffer
         .table(DATABASE_TABLE)?
