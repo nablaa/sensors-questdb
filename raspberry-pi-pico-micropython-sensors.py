@@ -80,14 +80,22 @@ def url_encoder(b):
     result = result.decode("ascii")
     return result
 
+def http_get(url):
+    import socket
+    _, _, host, path = url.split('/', 3)
+    hostname, port = host.split(':', 2)
+    addr = socket.getaddrinfo(hostname, int(port))[0][-1]
+    s = socket.socket()
+    s.connect(addr)
+    s.send(bytes('GET /%s HTTP/1.0\r\nHost: %s\r\n\r\n' % (path, host), 'utf8'))
+    data = s.recv(256)
+    print(str(data, 'utf8'))
+    s.close()
+
 def send_reading(temperature):
     sql_query = "INSERT INTO {} (location, temperature, humidity, pressure, timestamp) VALUES ('{}', {}, null, null, now());".format(table_name, location, temperature)
-    try:
-        r = urequests.get("http://" + database_host + ":" + str(database_port) + "/exec?fmt=json&query=" + url_encoder(sql_query))
-        print(r.status_code)
-        r.close()
-    except ValueError as e:
-        print("Got exception: " + str(e))
+    url = "http://" + database_host + ":" + str(database_port) + "/exec?fmt=json&query=" + url_encoder(sql_query)
+    http_get(url);
 
 while True:
     print("Reading temperature ...")
