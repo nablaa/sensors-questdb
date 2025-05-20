@@ -4,5 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.98"
 log = "0.4.27"
+open-meteo-rs = "0.0.4"
 questdb-rs = "4.0.4"
+tokio = "1.45.0"
