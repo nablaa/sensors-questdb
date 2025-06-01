@@ -98,14 +98,17 @@ def send_reading(temperature):
     http_get(url);
 
 while True:
-    print("Reading temperature ...")
-    led_pin.on()
-    temperature = read_temperature()
-    print(temperature)
-    print("Sending measurement ...")
-    send_reading(temperature)
-    print("Done.")
-    led_pin.off()
-    time.sleep(poll_interval_seconds)
+    try:
+        print("Reading temperature ...")
+        led_pin.on()
+        temperature = read_temperature()
+        print(temperature)
+        print("Sending measurement ...")
+        send_reading(temperature)
+        print("Done.")
+        led_pin.off()
+        time.sleep(poll_interval_seconds)
+    except:
+        pass
 
 print("Program ended")
