@@ -1,6 +1,9 @@
+mod common;
+
+use crate::common::Measurement;
+use crate::common::send_measurement;
 use anyhow::anyhow;
 use open_meteo_rs::Location;
-use questdb::ingress::{Buffer, Sender, TimestampNanos};
 use std::process::Command;
 
 const OPEN_METEO_LOCATION: Location = Location {
@@ -9,9 +12,6 @@ const OPEN_METEO_LOCATION: Location = Location {
 };
 const SENSORS_BINARY: &str = "bme280";
 const SENSORS_LOCATION: &str = "dummy";
-const DATABASE_HOSTNAME: &str = "192.168.0.205";
-const DATABASE_PORT: &str = "9000";
-const DATABASE_TABLE: &str = "measurements";
 
 #[tokio::main]
 async fn main() {
@@ -22,14 +22,6 @@ async fn main() {
         .expect("Getting open meteo data should succeed");
     send_measurement(&open_meteo_measurement).expect("Sending open meteo data should succeed");
     println!("All done.");
-}
-
-#[derive(Debug)]
-struct Measurement {
-    location: String,
-    temperature: f64,
-    humidity: Option<f64>,
-    pressure: Option<f64>,
 }
 
 fn read_sensors() -> Result<Measurement, std::io::Error> {
@@ -58,29 +50,6 @@ fn parse_reading_line(line: &str) -> Option<Measurement> {
         humidity,
         pressure,
     })
-}
-
-fn send_measurement(measurement: &Measurement) -> Result<(), questdb::Error> {
-    println!("Connecting to database...");
-    let mut sender = Sender::from_conf(format!("http::addr={DATABASE_HOSTNAME}:{DATABASE_PORT};"))?;
-
-    println!("Sending measurement {measurement:?} ...");
-    let mut buffer = Buffer::new();
-    buffer
-        .table(DATABASE_TABLE)?
-        .symbol("location", &measurement.location)?
-        .column_f64("temperature", measurement.temperature)?;
-
-    if let Some(humidity) = measurement.humidity {
-        buffer.column_f64("humidity", humidity)?;
-    };
-    if let Some(pressure) = measurement.pressure {
-        buffer.column_f64("pressure", pressure)?;
-    };
-
-    buffer.at(TimestampNanos::now())?;
-    sender.flush(&mut buffer)?;
-    Ok(())
 }
 
 async fn get_open_meteo_data() -> Result<Measurement, Box<dyn std::error::Error>> {

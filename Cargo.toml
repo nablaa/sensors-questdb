@@ -2,10 +2,21 @@
 name = "sensors-send-questdb"
 version = "0.1.0"
 edition = "2024"
+default-run = "sensors-send-questdb"
 
 [dependencies]
 anyhow = "1.0.98"
+btleplug = "0.11.8"
 log = "0.4.27"
 open-meteo-rs = "0.0.4"
 questdb-rs = "4.0.4"
 tokio = "1.45.0"
+uuid = "1.17.0"
+
+[[bin]]
+name = "bluetooth_measurement"
+path = "src/bluetooth_main.rs"
+
+[[bin]]
+name = "sensors-send-questdb"
+path = "src/main.rs"
