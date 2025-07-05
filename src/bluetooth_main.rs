@@ -8,19 +8,28 @@ use btleplug::platform::Manager;
 use std::time::Duration;
 
 const BLUETOOTH_SLEEP: Duration = Duration::from_secs(10);
-const SENSOR_LOCATION: &str = "dummy";
 const SENSOR_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x0000181a00001000800000805f9b34fb);
+
+const SENSORS: &[(&str, &str)] = &[
+    ("A4:C1:38:12:34:56", "kitchen"),
+    ("A4:C1:38:45:67:89", "bathroom"),
+];
 
 #[tokio::main]
 async fn main() {
-    let bluetooth_measurement = listen_bluetooth_measurement()
+    let bluetooth_measurements = listen_bluetooth_measurements()
         .await
-        .expect("Reading bluetooth measurement should succeed");
-    send_measurement(&bluetooth_measurement).expect("Sending bluetooth measurement should succeed");
+        .expect("Reading bluetooth measurements should succeed");
+    println!("Measurements: {:#?}", bluetooth_measurements);
+    let result: Result<Vec<()>, _> = bluetooth_measurements
+        .into_iter()
+        .map(|measurement| send_measurement(&measurement))
+        .collect();
+    result.expect("Sending bluetooth measurements should succeed");
     println!("All done.");
 }
 
-async fn listen_bluetooth_measurement() -> Result<Measurement, Box<dyn std::error::Error>> {
+async fn listen_bluetooth_measurements() -> Result<Vec<Measurement>, Box<dyn std::error::Error>> {
     let manager = Manager::new().await?;
     let adapters = manager.adapters().await?;
     let adapter = adapters.first().expect("Should find bluetooth adapeter");
@@ -31,28 +40,61 @@ async fn listen_bluetooth_measurement() -> Result<Measurement, Box<dyn std::erro
     // Give time for sensor to advertise
     tokio::time::sleep(BLUETOOTH_SLEEP).await;
 
-    let data = find_sensor_data(adapter).await.ok_or(std::io::Error::new(
-        std::io::ErrorKind::NetworkUnreachable,
-        "Could not find sensor",
-    ))?;
-    parse_advertisement_payload(&data)
+    get_all_sensors_measurements(adapter).await
 }
 
-async fn find_sensor_data(adapter: &Adapter) -> Option<Vec<u8>> {
-    println!("Finding sensor");
-    let peripherals = adapter.peripherals().await.ok()?;
+async fn get_all_sensors_measurements(
+    adapter: &Adapter,
+) -> Result<Vec<Measurement>, Box<dyn std::error::Error>> {
+    println!("Finding sensors");
+    let peripherals = adapter.peripherals().await.ok().ok_or(std::io::Error::new(
+        std::io::ErrorKind::NotConnected,
+        "Could not get peripherals",
+    ))?;
+    let mut measurements = Vec::new();
     for peripheral in peripherals {
         if let Ok(Some(props)) = peripheral.properties().await {
             if let Some(data) = props.service_data.get(&SENSOR_UUID) {
                 println!("Found 0x181A advertisement");
-                return Some(data.clone());
+                let location = get_location(data);
+                if let Ok(location) = location {
+                    if let Ok(measurement) = parse_advertisement_payload(&location, data) {
+                        measurements.push(measurement);
+                    } else {
+                        println!("Could not parse payload for location {}", location);
+                    }
+                } else {
+                    println!("Could not get location for {:?}", data);
+                }
             }
         }
     }
-    None
+    Ok(measurements)
 }
 
-fn parse_advertisement_payload(data: &[u8]) -> Result<Measurement, Box<dyn std::error::Error>> {
+fn get_location(data: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
+    if data.len() < 13 {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Payload too short: {:?}", data),
+        )));
+    }
+    let mac = &data[0..6];
+    let mac = format!(
+        "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+    );
+    SENSORS
+        .into_iter()
+        .find(|sensor| sensor.0 == mac)
+        .map(|sensor| sensor.1.to_string())
+        .ok_or("No matching location".into())
+}
+
+fn parse_advertisement_payload(
+    location: &str,
+    data: &[u8],
+) -> Result<Measurement, Box<dyn std::error::Error>> {
     if data.len() < 13 {
         return Err(Box::new(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -80,7 +122,7 @@ fn parse_advertisement_payload(data: &[u8]) -> Result<Measurement, Box<dyn std::
     println!("-----------------------------\n");
 
     Ok(Measurement {
-        location: SENSOR_LOCATION.to_string(),
+        location: location.to_string(),
         temperature: temperature as f64,
         humidity: Some(humidity.into()),
         pressure: None,
